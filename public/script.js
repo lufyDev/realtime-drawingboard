@@ -29,12 +29,37 @@ canvas.addEventListener('mouseup', () => drawing = false);
 canvas.addEventListener('mouseout', () => drawing = false);
 canvas.addEventListener('mousemove', draw);
 
+// touch support (mobile)
+canvas.addEventListener('touchstart', (e) => {
+  drawing = true;
+  if (e && e.cancelable) e.preventDefault();
+}, { passive: false });
+canvas.addEventListener('touchend', () => drawing = false);
+canvas.addEventListener('touchcancel', () => drawing = false);
+canvas.addEventListener('touchmove', draw, { passive: false });
+
 function draw(e) {
   if (!drawing) return;
 
+  // Determine pointer coordinates for both mouse and touch
+  let clientX, clientY;
+  if (e && e.touches && e.touches.length) {
+    clientX = e.touches[0].clientX;
+    clientY = e.touches[0].clientY;
+  } else if (e && e.changedTouches && e.changedTouches.length) {
+    clientX = e.changedTouches[0].clientX;
+    clientY = e.changedTouches[0].clientY;
+  } else {
+    clientX = e.clientX;
+    clientY = e.clientY;
+  }
+
   const rect = canvas.getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const y = e.clientY - rect.top;
+  const x = clientX - rect.left;
+  const y = clientY - rect.top;
+
+  // Prevent page scroll/zoom while drawing on touch devices
+  if (e && e.cancelable) e.preventDefault();
 
   const data = { x, y, color, name: getName() };
 
