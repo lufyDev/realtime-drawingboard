@@ -23,8 +23,23 @@ canvas.height = 400;
 
 let drawing = false;
 let color = '#' + Math.floor(Math.random()*16777215).toString(16);
+let lastX = 0;
+let lastY = 0;
+let remoteLastByName = {};
+let justStarted = false;
 
-canvas.addEventListener('mousedown', () => drawing = true);
+// smoother strokes
+ctx.lineCap = 'round';
+ctx.lineJoin = 'round';
+ctx.lineWidth = 6; // matches ~6px diameter of previous dots
+
+canvas.addEventListener('mousedown', (e) => {
+  drawing = true;
+  const rect = canvas.getBoundingClientRect();
+  lastX = e.clientX - rect.left;
+  lastY = e.clientY - rect.top;
+  justStarted = true;
+});
 canvas.addEventListener('mouseup', () => drawing = false);
 canvas.addEventListener('mouseout', () => drawing = false);
 canvas.addEventListener('mousemove', draw);
@@ -33,6 +48,13 @@ canvas.addEventListener('mousemove', draw);
 canvas.addEventListener('touchstart', (e) => {
   drawing = true;
   if (e && e.cancelable) e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const t = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]);
+  if (t) {
+    lastX = t.clientX - rect.left;
+    lastY = t.clientY - rect.top;
+  }
+  justStarted = true;
 }, { passive: false });
 canvas.addEventListener('touchend', () => drawing = false);
 canvas.addEventListener('touchcancel', () => drawing = false);
@@ -61,13 +83,17 @@ function draw(e) {
   // Prevent page scroll/zoom while drawing on touch devices
   if (e && e.cancelable) e.preventDefault();
 
-  const data = { x, y, color, name: getName() };
+  const data = { x, y, color, name: getName(), start: justStarted };
 
-  // draw locally
-  ctx.fillStyle = data.color;
+  // draw locally (smooth line segment)
+  ctx.strokeStyle = data.color;
   ctx.beginPath();
-  ctx.arc(data.x, data.y, 3, 0, Math.PI * 2); // radius 3 ≈ 6px diameter
-  ctx.fill();
+  ctx.moveTo(lastX, lastY);
+  ctx.lineTo(data.x, data.y);
+  ctx.stroke();
+  lastX = data.x;
+  lastY = data.y;
+  justStarted = false;
 
   // local status
   showStatus(`${data.name} is drawing…`);
@@ -76,14 +102,27 @@ function draw(e) {
   socket.emit('draw', data);
 }
 
-// receive draw data and draw it locally
+// receive draw data and draw it locally (smooth per-user lines)
 socket.on('draw', (data) => {
-  ctx.fillStyle = data.color;
-  ctx.beginPath();
-  ctx.arc(data.x, data.y, 3, 0, Math.PI * 2); // radius 3 ≈ 6px diameter
-  ctx.fill();
-
   const name = (data && data.name) ? data.name : 'Unknown User';
+  const isStart = !!(data && data.start);
+  const last = remoteLastByName[name];
+
+  if (!isStart && last) {
+    ctx.strokeStyle = data.color;
+    ctx.beginPath();
+    ctx.moveTo(last.x, last.y);
+    ctx.lineTo(data.x, data.y);
+    ctx.stroke();
+  } else {
+    // first point from this user or new stroke: render a small dot
+    ctx.fillStyle = data.color;
+    ctx.beginPath();
+    ctx.arc(data.x, data.y, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  remoteLastByName[name] = { x: data.x, y: data.y };
   showStatus(`${name} is drawing…`);
 });
 
@@ -95,4 +134,5 @@ document.getElementById('clear').addEventListener('click', () => {
 
 socket.on('clear', () => {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  remoteLastByName = {};
 });
