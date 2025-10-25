@@ -2,8 +2,8 @@ const socket = io();
 
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
-canvas.width = 800;
-canvas.height = 500;
+canvas.width = 600;
+canvas.height = 400;
 
 let drawing = false;
 let color = '#' + Math.floor(Math.random()*16777215).toString(16);
@@ -24,16 +24,20 @@ function draw(e) {
 
   // draw locally
   ctx.fillStyle = data.color;
-  ctx.fillRect(data.x, data.y, 4, 4);
+  ctx.beginPath();
+  ctx.arc(data.x, data.y, 3, 0, Math.PI * 2); // radius 3 ≈ 6px diameter
+  ctx.fill();
 
   // send draw event to others
   socket.emit('draw', data);
 }
 
-// receive draw data
+// receive draw data and draw it locally
 socket.on('draw', (data) => {
   ctx.fillStyle = data.color;
-  ctx.fillRect(data.x, data.y, 4, 4);
+  ctx.beginPath();
+  ctx.arc(data.x, data.y, 3, 0, Math.PI * 2); // radius 3 ≈ 6px diameter
+  ctx.fill();
 });
 
 // clear board
